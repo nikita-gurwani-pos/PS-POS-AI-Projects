@@ -95,3 +95,5 @@ For more specific setup guides, please refer to the following documents in the `
 -   `ENV_EXAMPLE.md`: Detailed explanation of environment variables.
 -   `MCP_SETUP.md`: Guide for setting up the MCP client.
 -   `SIMPLE_MCP_GUIDE.md`: A simplified guide for the MCP client.
+
+📌 License: This project is © 2025 Arshad Shafi Khan. All rights reserved. Unauthorized use or distribution is prohibited.
