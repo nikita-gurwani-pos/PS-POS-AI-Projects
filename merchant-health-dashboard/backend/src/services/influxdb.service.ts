@@ -129,6 +129,11 @@ class InfluxDBService {
     return await this.query(query);
   }
 
+  async getOrgCodesWithRegex(regex: string): Promise<QueryResult[]> {
+    const query = `SHOW TAG VALUES FROM "http_client_requests" WITH KEY = "org_code" WHERE "org_code" =~ /(?i)^${regex}.*/`;
+    return await this.query(query);
+  }
+
   // Get available request types for an org
   async getRequestTypes(orgCode: string): Promise<QueryResult[]> {
     const query = `SHOW TAG VALUES FROM "http_client_requests" WITH KEY = "type" WHERE "org_code" = '${orgCode}' LIMIT 20`;
@@ -169,28 +174,29 @@ class InfluxDBService {
     orgCode: string,
     timeFilter?: string,
   ): Promise<{
-    totalRequests: number;
+    totalSuccessRequests: number;
     successRate: number;
     avgResponseTime: number;
     errorCount: number;
   }> {
     try {
-      const [totalRequestsResult, errorResult, avgResponseTimeResult] =
+      const [totalSuccessRequestsResult, errorResult, avgResponseTimeResult] =
         await Promise.all([
           this.getMerchantRequests(orgCode, timeFilter, true),
           this.getMerchantRequests(orgCode, timeFilter, false),
           this.getMerchantAPIsAvgResponseTime(orgCode, timeFilter),
         ]);
 
-      const totalRequests = totalRequestsResult[0]?.total_requests || 0;
+      const totalSuccessRequests =
+        totalSuccessRequestsResult[0]?.total_requests || 0;
       const errorCount = errorResult[0]?.total_requests || 0;
       const successRate =
-        totalRequests > 0
-          ? ((totalRequests - errorCount) / totalRequests) * 100
+        totalSuccessRequests > 0
+          ? ((totalSuccessRequests - errorCount) / totalSuccessRequests) * 100
           : 100;
 
       return {
-        totalRequests,
+        totalSuccessRequests,
         successRate: Math.round(successRate * 100) / 100,
         avgResponseTime: avgResponseTimeResult[0]?.avg_response_time || 0,
         errorCount,

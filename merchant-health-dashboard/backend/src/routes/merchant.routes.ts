@@ -2,6 +2,8 @@ import express from "express";
 import influxDBService from "../services/influxdb.service";
 import authenticateToken from "../middleware/auth.middleware";
 import logger from "../utils/logger";
+import { post } from "../utils/restUtils";
+import { processEzetapResponse, EzetapApiResponse } from "../utils/utils";
 
 const router = express.Router();
 
@@ -10,39 +12,165 @@ router.use(authenticateToken);
 
 /**
  * @swagger
+ * /api/merchants/filter:
+ *   get:
+ *     summary: Filter merchants by organization code
+ *     description: Search for merchants using organization code pattern matching. Uses regex to find matching organization codes.
+ *     tags: [Merchants]
+ *     parameters:
+ *       - in: query
+ *         name: org
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Organization code pattern to search for (supports regex matching)
+ *         example: "ORG_123"
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved filtered merchants
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 merchants:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Array of organization codes matching the filter
+ *                   example: ["ORG_12345", "ORG_12346", "ORG_12390"]
+ *       400:
+ *         description: Missing required 'org' query parameter
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Missing 'org' query parameter"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to fetch merchants filter"
+ */
+router.get("/filter", async (req, res) => {
+  try {
+    const org = req.query.org as string; // Extract the 'org' query parameter
+
+    if (!org) {
+      return res.status(400).json({
+        error: "Missing 'org' query parameter"
+      });
+    }
+
+    const orgCodes = await influxDBService.getOrgCodesWithRegex(org);
+    const merchants = orgCodes.map((row: any) => row.value);
+
+    res.status(200).json({
+      merchants,
+    });
+  }
+  catch (error: any) {
+    logger.error("Get merchants filter error:", error);
+    res.status(500).json({
+      error: "Failed to fetch merchants filter",
+    });
+  }
+});
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     MerchantHealth:
+ *       type: object
+ *       properties:
+ *         orgCode:
+ *           type: string
+ *           example: "ORG_12345"
+ *         successfulTxns:
+ *           type: number
+ *           description: Sum of AUTHORIZED and SETTLED transactions
+ *           example: 1245
+ *         failedTxns:
+ *           type: number
+ *           description: Number of FAILED transactions
+ *           example: 12
+ *         pendingTxns:
+ *           type: number
+ *           description: Number of PENDING transactions
+ *           example: 5
+ *         healthStatus:
+ *           type: string
+ *           enum: [Good, Warning, Critical, Unknown]
+ *           example: "Good"
+ *         healthColor:
+ *           type: string
+ *           description: Hex color code for health status
+ *           example: "#4CAF50"
+ */
+
+/**
+ * @swagger
  * /api/merchants:
  *   get:
- *     summary: Get all available merchants/organizations
- *     description: Get list of all merchants with their basic information
+ *     summary: Get merchant health dashboard data
+ *     description: Get list of merchants with transaction health information including success/failure counts and health status
  *     tags: [Merchants]
  *     parameters:
  *       - in: query
  *         name: page
  *         required: false
  *         schema:
- *           type: string
+ *           type: number
  *         example: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         required: false
  *         schema:
- *           type: string
+ *           type: number
  *         example: 10
+ *         description: Number of merchants per page
+ *       - in: query
+ *         name: filter
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [30d, 7d, 1d, 6h, 1hr, 10m, 1m]
+ *         example: "1d"
+ *         description: Time filter for transaction data
  *     responses:
  *       200:
- *         description: List of merchants
+ *         description: Merchant health data retrieved successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: 'object'
+ *               type: object
  *               properties:
  *                 merchants:
- *                   type: 'array'
+ *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Merchant'
+ *                     $ref: '#/components/schemas/MerchantHealth'
  *                 total:
- *                   type: 'number'
+ *                   type: number
  *                   example: 50
+ *                 page:
+ *                   type: number
+ *                   example: 1
+ *                 limit:
+ *                   type: number
+ *                   example: 10
+ *                 timeFilter:
+ *                   type: string
+ *                   example: "1d"
  *       500:
  *         description: Internal server error
  *         content:
@@ -56,16 +184,30 @@ router.get("/", async (req, res) => {
     const limit: number = parseInt(req.query.limit as string) || 10;
     const offset: number = page * limit - limit;
     const orgCodes = await influxDBService.getOrgCodes(offset, limit);
+    const timeFilter: string = req.query.filter as string
 
-    // Transform the data to a more user-friendly format
-    const merchants = orgCodes.map((row: any) => ({
-      orgCode: row.value,
-    }));
+    const orgCodeString = orgCodes.map((row: any) => row.value).join(',');
+
+    const ezetapResponse: EzetapApiResponse = await post(`${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`, {
+      "username": `${process.env.EZETAP_USERNAME}`,
+      "password": `${process.env.EZETAP_PASSWORD}`
+    },
+      {
+        "orgCodes": orgCodeString,
+        "filter": timeFilter
+      }) as EzetapApiResponse ;
+
+    // Process the EZETAP response to match UI requirements
+    const processedMerchants = processEzetapResponse(ezetapResponse);
 
     res.json({
-      merchants,
-      total: merchants.length,
-    });
+      merchants: processedMerchants,
+      total: processedMerchants.length,
+      page,
+      limit,
+      timeFilter
+    })
+
   } catch (error: any) {
     logger.error("Get merchants error:", error);
     res.status(500).json({
