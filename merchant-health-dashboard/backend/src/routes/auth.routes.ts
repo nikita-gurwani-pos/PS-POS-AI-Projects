@@ -28,8 +28,23 @@ const DUMMY_USER = {
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: User login
- *     description: Authenticate user with username and password
+ *     summary: User authentication
+ *     description: |
+ *       Authenticate users to access the AI-powered Merchant Health Dashboard.
+ *       
+ *       **Authentication Flow:**
+ *       1. Submit username and password
+ *       2. Receive JWT token upon successful authentication
+ *       3. Use JWT token in Authorization header for all subsequent requests
+ *       
+ *       **Default Credentials (Development):**
+ *       - Username: `admin`
+ *       - Password: `password`
+ *       
+ *       **Token Usage:**
+ *       - Include token in Authorization header: `Bearer <token>`
+ *       - Token expires in 6 hours
+ *       - Use `/api/auth/verify` to check token validity
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -38,25 +53,43 @@ const DUMMY_USER = {
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/LoginRequest'
+ *           examples:
+ *             admin_login:
+ *               summary: Admin user login
+ *               value:
+ *                 username: "admin"
+ *                 password: "password"
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: Authentication successful
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/LoginResponse'
+ *             examples:
+ *               successful_login:
+ *                 summary: Successful authentication
+ *                 value:
+ *                   message: "Login successful"
+ *                   token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTk1OTA3NjAsImV4cCI6MTc1OTYxMjM2MH0.bbjaRurnF7EU2efVwrQDtbFWtLTPauTUsriMZYDfJ4E"
+ *                   user:
+ *                     id: 1
+ *                     username: "admin"
+ *                     role: "admin"
  *       400:
- *         description: Validation error
+ *         description: Invalid request parameters
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Error'
+ *               $ref: '#/components/schemas/ValidationError'
  *       401:
- *         description: Invalid credentials
+ *         description: Authentication failed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               error: "Invalid credentials"
  *       500:
  *         description: Internal server error
  *         content:
@@ -119,14 +152,25 @@ router.post('/login', async (req, res) => {
  * @swagger
  * /api/auth/verify:
  *   get:
- *     summary: Verify JWT token
- *     description: Verify if the provided JWT token is valid
+ *     summary: Verify JWT token validity
+ *     description: |
+ *       Check if the provided JWT token is valid and not expired.
+ *       
+ *       **Use Cases:**
+ *       - Validate token before making API requests
+ *       - Check token expiration status
+ *       - Get current user information from token
+ *       
+ *       **Token Information:**
+ *       - Tokens expire after 6 hours
+ *       - Contains user ID, username, and role
+ *       - Used for all authenticated API endpoints
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Token is valid
+ *         description: Token is valid and not expired
  *         content:
  *           application/json:
  *             schema:
@@ -135,18 +179,53 @@ router.post('/login', async (req, res) => {
  *                 valid:
  *                   type: 'boolean'
  *                   example: true
+ *                   description: Whether the token is valid
  *                 user:
  *                   type: 'object'
  *                   properties:
- *                     id: { type: 'number', example: 1 }
- *                     username: { type: 'string', example: 'admin' }
- *                     role: { type: 'string', example: 'admin' }
+ *                     id: 
+ *                       type: 'number'
+ *                       example: 1
+ *                       description: User ID
+ *                     username: 
+ *                       type: 'string'
+ *                       example: 'admin'
+ *                       description: Username
+ *                     role: 
+ *                       type: 'string'
+ *                       example: 'admin'
+ *                       description: User role
+ *             examples:
+ *               valid_token:
+ *                 summary: Valid token response
+ *                 value:
+ *                   valid: true
+ *                   user:
+ *                     id: 1
+ *                     username: "admin"
+ *                     role: "admin"
  *       401:
- *         description: Invalid or missing token
+ *         description: Invalid, expired, or missing token
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               missing_token:
+ *                 summary: No token provided
+ *                 value:
+ *                   error: "Access denied"
+ *                   details: ["No token provided"]
+ *               invalid_token:
+ *                 summary: Invalid token format
+ *                 value:
+ *                   error: "Access denied"
+ *                   details: ["Invalid token"]
+ *               expired_token:
+ *                 summary: Token has expired
+ *                 value:
+ *                   error: "Access denied"
+ *                   details: ["Token expired"]
  */
 router.get('/verify', async (req, res) => {
   try {

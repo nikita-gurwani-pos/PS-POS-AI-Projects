@@ -75,29 +75,55 @@ app.use('/api/coralogix/prompt', promptRoutes);
  * @swagger
  * /api/health:
  *   get:
- *     summary: Health check endpoint
- *     description: Check if the API server is running and healthy
+ *     summary: System health check
+ *     description: |
+ *       Check the overall health and status of the AI-powered Merchant Health Dashboard API.
+ *       
+ *       **Health Indicators:**
+ *       - API server status and uptime
+ *       - Current timestamp for synchronization
+ *       - System availability confirmation
+ *       
+ *       **Use Cases:**
+ *       - Load balancer health checks
+ *       - Monitoring system integration
+ *       - Service discovery validation
+ *       - API availability verification
+ *       
+ *       **Response Information:**
+ *       - `status`: Always "OK" when API is running
+ *       - `timestamp`: Current server time (ISO 8601 format)
+ *       - `uptime`: Server uptime in seconds
  *     tags: [System]
  *     security: []
  *     responses:
  *       200:
- *         description: Server is healthy
+ *         description: System is healthy and operational
  *         content:
  *           application/json:
  *             schema:
- *               type: 'object'
+ *               type: object
  *               properties:
  *                 status:
- *                   type: 'string'
- *                   example: 'OK'
+ *                   type: string
+ *                   example: "OK"
+ *                   description: System health status
  *                 timestamp:
- *                   type: 'string'
- *                   format: 'date-time'
- *                   example: '2025-09-27T18:30:00.000Z'
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-10-04T19:07:34.510Z"
+ *                   description: Current server timestamp
  *                 uptime:
- *                   type: 'number'
- *                   example: 3600
+ *                   type: number
+ *                   example: 3600.123
  *                   description: Server uptime in seconds
+ *             examples:
+ *               healthy_system:
+ *                 summary: Healthy system response
+ *                 value:
+ *                   status: "OK"
+ *                   timestamp: "2025-10-04T19:07:34.510Z"
+ *                   uptime: 3600.123
  */
 app.get('/api/health', (req, res) => {
   res.json({ 

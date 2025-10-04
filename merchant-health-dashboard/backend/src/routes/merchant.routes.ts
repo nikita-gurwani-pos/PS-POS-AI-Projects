@@ -14,9 +14,29 @@ router.use(authenticateToken);
  * @swagger
  * /api/merchants/filter:
  *   get:
- *     summary: Filter merchants by organization code
- *     description: Search for merchants using organization code pattern matching. Uses regex to find matching organization codes.
- *     tags: [Merchants]
+ *     summary: Search and filter merchants
+ *     description: |
+ *       Search for merchants using organization code pattern matching with regex support.
+ *       
+ *       **Search Features:**
+ *       - Regex pattern matching for flexible searches
+ *       - Case-insensitive organization code lookup
+ *       - Real-time merchant discovery
+ *       - Integration with InfluxDB merchant data
+ *       
+ *       **Use Cases:**
+ *       - Find merchants by partial organization code
+ *       - Discover related merchant organizations
+ *       - Validate merchant existence
+ *       - Build merchant selection interfaces
+ *       
+ *       **Search Patterns:**
+ *       - Exact match: `ORG_123`
+ *       - Partial match: `ORG_12` (finds ORG_123, ORG_124, etc.)
+ *       - Wildcard: `ORG_*` (finds all ORG_ prefixed merchants)
+ *     tags: [Merchant Management]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: org

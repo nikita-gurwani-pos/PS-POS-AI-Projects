@@ -22,9 +22,29 @@ const dashboardQuerySchema = z.object({
  * @swagger
  * /api/dashboard/overview:
  *   get:
- *     summary: Get dashboard overview metrics
- *     description: Get high-level metrics for a specific organization
- *     tags: [Dashboard]
+ *     summary: Get merchant health dashboard overview
+ *     description: |
+ *       Retrieve comprehensive health metrics for a specific merchant organization.
+ *       
+ *       **Key Metrics:**
+ *       - Total request volume and success rates
+ *       - Average response times and performance indicators
+ *       - Error counts and failure analysis
+ *       - Request type breakdown (Normal, Txn_posting, Logtickets)
+ *       
+ *       **Data Sources:**
+ *       - InfluxDB time-series data
+ *       - Real-time merchant transaction logs
+ *       - Historical performance trends
+ *       
+ *       **Use Cases:**
+ *       - Monitor merchant health status
+ *       - Identify performance bottlenecks
+ *       - Track success rates and error patterns
+ *       - Generate executive dashboards
+ *     tags: [Dashboard & Analytics]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: orgCode
@@ -32,21 +52,28 @@ const dashboardQuerySchema = z.object({
  *         schema:
  *           type: string
  *         example: TFSYAMUNA_78897285
- *         description: Organization code
+ *         description: Unique organization/merchant code identifier
  *       - in: query
  *         name: startTime
  *         schema:
  *           type: string
  *           format: date-time
  *         example: 2025-09-20T00:00:00Z
- *         description: Start time for data filtering
+ *         description: Start time for data filtering (ISO 8601 format)
  *       - in: query
  *         name: endTime
  *         schema:
  *           type: string
  *           format: date-time
  *         example: 2025-09-27T23:59:59Z
- *         description: End time for data filtering
+ *         description: End time for data filtering (ISO 8601 format)
+ *       - in: query
+ *         name: requestType
+ *         schema:
+ *           type: string
+ *           enum: [Normal, Txn_posting, Logtickets]
+ *         example: Normal
+ *         description: Filter by specific request type
  *     responses:
  *       200:
  *         description: Dashboard overview data

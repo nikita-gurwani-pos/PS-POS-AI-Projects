@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Backend",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/src/app.ts",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeArgs": ["-r", "ts-node/register"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "console": "integratedTerminal",
+      "restart": true,
+      "protocol": "inspector",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/backend/dist/**/*.js"]
+    },
+    {
+      "name": "Attach to Debug Process",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "localRoot": "${workspaceFolder}/backend",
+      "remoteRoot": "${workspaceFolder}/backend",
+      "protocol": "inspector"
+    }
+  ]
+}

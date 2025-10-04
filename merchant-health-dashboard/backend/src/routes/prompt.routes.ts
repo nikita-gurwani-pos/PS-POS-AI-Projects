@@ -133,34 +133,158 @@ const promptSchema = z.object({
  * @swagger
  * /api/coralogix/prompt:
  *   post:
- *     summary: Execute user prompt
- *     description: Execute a natural language query against the MCP server
- *     tags: [Prompt]
+ *     summary: Execute AI-powered natural language query
+ *     description: |
+ *       Process natural language queries using AI to analyze transaction data, search logs, and provide intelligent insights.
+ *       
+ *       **Key Features:**
+ *       - **Smart Transaction Analysis**: Automatically extracts timestamps from transaction IDs (yymmddhhmmss format)
+ *       - **Intelligent Time Range**: Uses transaction timestamp ± 2 hours for optimal search results
+ *       - **Natural Language Processing**: Converts complex queries into structured MCP requests
+ *       - **Real-time Log Analysis**: Searches Coralogix logs using DataPrime syntax
+ *       - **AI Response Formatting**: Converts technical log data into business-friendly explanations
+ *       
+ *       **Supported Query Types:**
+ *       - Transaction status checks: "is this transaction 251004150441756E739681790 posted"
+ *       - Log searches: "show me errors for merchant ABC123"
+ *       - Performance analysis: "what's the success rate for today"
+ *       - Custom queries: Any natural language question about your transaction data
+ *       
+ *       **Transaction ID Format:**
+ *       - Format: `yymmddhhmmss` + additional characters
+ *       - Example: `251004150441756E739681790` = 2025-10-04 15:04:41
+ *       - System automatically extracts timestamp and sets appropriate search window
+ *     tags: [AI & Analytics]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/PromptRequest'
+ *           examples:
+ *             transaction_check:
+ *               summary: Check transaction status
+ *               value:
+ *                 prompt: "is this transaction 251004150441756E739681790 posted"
+ *             merchant_analysis:
+ *               summary: Analyze merchant performance
+ *               value:
+ *                 prompt: "show me all failed transactions for merchant M_S_KUMAR_DAL_MILL today"
+ *             error_investigation:
+ *               summary: Investigate system errors
+ *               value:
+ *                 prompt: "what errors occurred in the last hour"
  *     responses:
  *       200:
- *         description: Query executed successfully
+ *         description: Successful AI analysis with natural language response
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/PromptResponse'
+ *             examples:
+ *               successful_transaction:
+ *                 summary: Transaction found and analyzed
+ *                 value:
+ *                   success: true
+ *                   data:
+ *                     naturalLanguageResponse: "Yes, the transaction with ID 251004150441756E739681790 was successfully posted on 2025-10-04 at 15:04:45.301. The transaction was AUTHORIZED for merchant M S KUMAR DAL MILL with amount ₹1,285.00 using VISA Credit card ending in 3000."
+ *                     mcpRequest:
+ *                       method: "tools/call"
+ *                       params:
+ *                         name: "get_logs"
+ *                         arguments:
+ *                           query: "source logs | filter $d ~~ '251004150441756E739681790'"
+ *                           startDate: "2025-10-04T13:04:41.000Z"
+ *                           endDate: "2025-10-04T17:04:41.000Z"
+ *                     executionTime: 17109
+ *                   prompt: "is this transaction 251004150441756E739681790 posted"
+ *                   timestamp: "2025-10-04T17:02:48.305Z"
+ *               no_results:
+ *                 summary: No matching data found
+ *                 value:
+ *                   success: true
+ *                   data:
+ *                     naturalLanguageResponse: "No matching records were found for the provided criteria. This could be due to the transaction not existing, incorrect transaction ID, or the data not being available in the current time range."
+ *                     executionTime: 8500
+ *                   prompt: "is this transaction 999999999999999999999 posted"
+ *                   timestamp: "2025-10-04T17:02:48.305Z"
  *       400:
  *         description: Invalid request parameters
  *         content:
  *           application/json:
  *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *             examples:
+ *               missing_prompt:
+ *                 summary: Missing required prompt
+ *                 value:
+ *                   error: "Invalid request parameters"
+ *                   details:
+ *                     - code: "invalid_type"
+ *                       expected: "string"
+ *                       received: "undefined"
+ *                       path: ["prompt"]
+ *                       message: "Prompt is required"
+ *       401:
+ *         description: Unauthorized - Invalid or missing JWT token
+ *         content:
+ *           application/json:
+ *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               error: "Access denied"
+ *               details: ["Invalid token"]
+ *       503:
+ *         description: Service temporarily unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "MCP server error"
+ *                 message:
+ *                   type: string
+ *                   example: "MCP request timeout (120 seconds)"
+ *                 prompt:
+ *                   type: string
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *             examples:
+ *               mcp_timeout:
+ *                 summary: MCP server timeout
+ *                 value:
+ *                   success: false
+ *                   error: "MCP server error"
+ *                   message: "MCP request timeout (120 seconds)"
+ *                   prompt: "is this transaction 251004150441756E739681790 posted"
+ *                   timestamp: "2025-10-04T17:02:48.305Z"
+ *               llm_error:
+ *                 summary: LLM service error
+ *                 value:
+ *                   success: false
+ *                   error: "LLM service error"
+ *                   message: "Google API key not configured"
+ *                   prompt: "is this transaction 251004150441756E739681790 posted"
+ *                   timestamp: "2025-10-04T17:02:48.305Z"
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               error: "Failed to execute prompt"
+ *               message: "Unexpected error occurred during processing"
+ *               prompt: "is this transaction 251004150441756E739681790 posted"
+ *               timestamp: "2025-10-04T17:02:48.305Z"
  */
 router.post('/', authenticateToken, async (req, res) => {
   let prompt = '';
