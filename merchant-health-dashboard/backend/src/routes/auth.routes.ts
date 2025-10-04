@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import logger from '../utils/logger';
 import dotenv from 'dotenv';
+import { jwtDecode } from 'jwt-decode';
 
 dotenv.config();
 
@@ -186,6 +187,22 @@ async function generateJWTToken(){
   );
   return token;
 }
+
+
+
+export function getTokenExpiry(token: string): Date | null {
+  try {
+    const decoded = jwtDecode<{ exp?: number }>(token);
+    if (!decoded.exp) return null;
+
+    const expiryDate = new Date(decoded.exp * 1000);
+    return expiryDate;
+  } catch (error) {
+    console.error("Invalid token:", error);
+    return null;
+  }
+}
+
 
 
 

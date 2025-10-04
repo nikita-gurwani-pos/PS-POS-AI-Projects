@@ -122,7 +122,7 @@ router.get("/filter", async (req, res) => {
  * /api/merchants:
  *   get:
  *     summary: Get merchant health dashboard data
- *     description: Get list of merchants with transaction health information including success/failure counts and health status
+ *     description: Get list of merchants with transaction health information including success/failure counts and health status. Supports filtering by organization code and time range.
  *     tags: [Merchants]
  *     parameters:
  *       - in: query
@@ -139,6 +139,13 @@ router.get("/filter", async (req, res) => {
  *           type: number
  *         example: 10
  *         description: Number of merchants per page
+ *       - in: query
+ *         name: orgCode
+ *         required: false
+ *         schema:
+ *           type: string
+ *         example: "ORG_12345"
+ *         description: Filter by specific organization code. If provided, only data for this merchant will be returned.
  *       - in: query
  *         name: filter
  *         required: false
@@ -182,12 +189,17 @@ router.get("/", async (req, res) => {
   try {
     const page: number = parseInt(req.query.page as string) || 1;
     const limit: number = parseInt(req.query.limit as string) || 10;
+    const orgCodeFIlter = req.query.orgCode as string || ""
     const offset: number = page * limit - limit;
-    const orgCodes = await influxDBService.getOrgCodes(offset, limit);
     const timeFilter: string = req.query.filter as string
-
-    const orgCodeString = orgCodes.map((row: any) => row.value).join(',');
-
+    let orgCodeString = ""
+    if(orgCodeFIlter===""){
+      const orgCodes = await influxDBService.getOrgCodes(offset, limit);
+      orgCodeString = orgCodes.map((row: any) => row.value).join(',');
+    }
+    else{
+      orgCodeString = orgCodeFIlter
+    }
     const ezetapResponse: EzetapApiResponse = await post(`${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`, {
       "username": `${process.env.EZETAP_USERNAME}`,
       "password": `${process.env.EZETAP_PASSWORD}`

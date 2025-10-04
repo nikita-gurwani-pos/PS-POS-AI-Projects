@@ -12,6 +12,7 @@ import promptRoutes from './routes/prompt.routes';
 import errorMiddleware from './middleware/error.middleware';
 import logger from './utils/logger';
 import { setupSwagger } from './config/swagger';
+import CoraLogixMCPConnection from './mcp/mcpConnect';
 
 dotenv.config();
 
@@ -49,11 +50,26 @@ app.use((req, res, next) => {
 // Setup Swagger documentation
 setupSwagger(app);
 
+const coralogixMCP = CoraLogixMCPConnection.getConnectionObject();
+coralogixMCP.on('stdout', (data) => console.log('[stdout]', data));
+coralogixMCP.on('stderr', (data) => console.error('[stderr]', data));
+coralogixMCP.on('close', (code) => console.log(`Process closed with code ${code}`));
+coralogixMCP.on('error', (err) => console.error('Process error:', err));
+
+// Initialize MCP connection
+coralogixMCP.initialize().then(() => {
+  logger.info('MCP connection initialized successfully');
+}).catch((error) => {
+  logger.error('Failed to initialize MCP connection:', error);
+});
+
+export { coralogixMCP };
+
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/merchants', merchantRoutes);
-app.use('/api/prompt', promptRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/coralogix/prompt', promptRoutes);
 
 /**
  * @swagger
@@ -114,6 +130,7 @@ const gracefulShutdown = (signal: string) => {
   
   server.close(() => {
     logger.info('HTTP server closed.');
+    coralogixMCP.disconnect();
     process.exit(0);
   });
 

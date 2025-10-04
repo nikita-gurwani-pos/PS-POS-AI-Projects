@@ -188,4 +188,99 @@ router.get("/timeseries", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/dashboard/configSR:
+ *   get:
+ *     summary: Get configuration success rate data
+ *     description: Get success and error counts for HTTP client requests grouped by fetch_key, org_code, and description for Normal and Txn_posting request types
+ *     tags: [Dashboard]
+ *     parameters:
+ *       - in: query
+ *         name: orgCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: TFSYAMUNA_78897285
+ *         description: Organization code to filter results
+ *       - in: query
+ *         name: filter
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "7d"
+ *         description: Time filter for data retrieval (e.g., 1h, 6h, 1d, 7d, 30d)
+ *     responses:
+ *       200:
+ *         description: Configuration success rate data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 configSR:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       success:
+ *                         type: number
+ *                         description: Count of successful requests (2xx status codes)
+ *                         example: 150
+ *                       errors:
+ *                         type: number
+ *                         description: Count of error requests (non-2xx status codes)
+ *                         example: 5
+ *                       fetch_key:
+ *                         type: string
+ *                         description: API fetch key identifier
+ *                         example: "CONFIG_API"
+ *                       org_code:
+ *                         type: string
+ *                         description: Organization code
+ *                         example: "TFSYAMUNA_78897285"
+ *                       description:
+ *                         type: string
+ *                         description: Request description
+ *                         example: "Configuration fetch"
+ *       400:
+ *         description: Missing required parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Missing required parameters: orgCode and filter"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/configSR", async (req, res) => {
+  try {
+    const orgCode = req.query.orgCode as string;
+    const timeFilter: string = req.query.filter as string;
+
+    if (!orgCode || !timeFilter) {
+      return res.status(400).json({
+        error: "Missing required parameters: orgCode and filter"
+      });
+    }
+
+    const configSR = await influxDBService.getConfigSR(orgCode, timeFilter);
+    res.json({
+      configSR,
+    });
+  } catch (error: any) {
+    logger.error("Config SR error:", error);
+    res.status(500).json({
+      error: "Failed to fetch configuration success rate data",
+    });
+  }
+});
+
 export default router;

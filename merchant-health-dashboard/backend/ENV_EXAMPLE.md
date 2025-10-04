@@ -11,6 +11,9 @@ FRONTEND_URL=http://localhost:3000
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-here
 
+# LLM Configuration (Google Gemini)
+GOOGLE_API_KEY=your-google-api-key-here
+
 # InfluxDB Configuration
 INFLUXDB_HOST=localhost
 INFLUXDB_PORT=8086
@@ -51,17 +54,25 @@ MCP_CORALOGIX_AUTO_CONNECT=true
 - `JWT_SECRET`: Used for JWT token signing
 - `CORALOGIX_API_KEY`: Your Coralogix API key for log access
 - `CORALOGIX_REGION`: Your Coralogix region (us, eu, ap, etc.)
+- `GOOGLE_API_KEY`: Your Google API key for Gemini natural language processing
 
 ### Optional but Recommended:
 - `CORALOGIX_DOMAIN`: Usually coralogix.com unless using a custom domain
 - `MCP_DEFAULT_SERVER`: Should be set to 'coralogix'
 
-## Getting Your Coralogix API Key
+## Getting Your API Keys
 
+### Coralogix API Key:
 1. Log into your Coralogix dashboard
 2. Go to Settings → API Keys
 3. Create a new API key with appropriate permissions
 4. Copy the key and add it to your `.env` file
+
+### Google API Key (for Gemini):
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key and add it to your `.env` file as `GOOGLE_API_KEY`
 
 ## Coralogix MCP Server Configuration
 
