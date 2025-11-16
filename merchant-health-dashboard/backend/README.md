@@ -82,6 +82,14 @@ The `package.json` file includes several scripts for managing the application:
 -   `npm run kill`: Forcefully stops any process running on the application's port (`3001`).
 -   `npm run debug`: Runs the application in debug mode, allowing you to attach a debugger.
 
+## Merchant Routes
+
+The file `src/routes/merchant.routes.ts` contains the Express Router for all APIs used on the first page after login in the merchant dashboard. It handles merchant filtering, health dashboard data, and detailed merchant information, with integrated authentication and Swagger documentation.
+
+## Dashboard Routes
+
+The file `src/routes/dashboard.routes.ts` contains the Express Router for all APIs used on the second page, when a user clicks on "more details" for an organization code in the first page. It provides endpoints for merchant health dashboard overview, time series data for charts, and configuration success rate metrics, with authentication and validation.
+
 ## API Documentation
 
 This project uses Swagger for API documentation. Once the server is running, you can access the interactive Swagger UI at:

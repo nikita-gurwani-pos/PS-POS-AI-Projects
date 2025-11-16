@@ -1,9 +1,17 @@
+/*
+This is the Router used for all the apis in first page post login for merchant dashboard
+*/
+
 import express from "express";
 import influxDBService from "../services/influxdb.service";
 import authenticateToken from "../middleware/auth.middleware";
 import logger from "../utils/logger";
 import { post } from "../utils/restUtils";
-import { processEzetapResponse, EzetapApiResponse } from "../utils/utils";
+import {
+  processEzetapResponse,
+  EzetapApiResponse,
+  ProcessedMerchantData,
+} from "../utils/utils";
 
 const router = express.Router();
 
@@ -17,19 +25,19 @@ router.use(authenticateToken);
  *     summary: Search and filter merchants
  *     description: |
  *       Search for merchants using organization code pattern matching with regex support.
- *       
+ *
  *       **Search Features:**
  *       - Regex pattern matching for flexible searches
  *       - Case-insensitive organization code lookup
  *       - Real-time merchant discovery
  *       - Integration with InfluxDB merchant data
- *       
+ *
  *       **Use Cases:**
  *       - Find merchants by partial organization code
  *       - Discover related merchant organizations
  *       - Validate merchant existence
  *       - Build merchant selection interfaces
- *       
+ *
  *       **Search Patterns:**
  *       - Exact match: `ORG_123`
  *       - Partial match: `ORG_12` (finds ORG_123, ORG_124, etc.)
@@ -86,7 +94,7 @@ router.get("/filter", async (req, res) => {
 
     if (!org) {
       return res.status(400).json({
-        error: "Missing 'org' query parameter"
+        error: "Missing 'org' query parameter",
       });
     }
 
@@ -96,8 +104,7 @@ router.get("/filter", async (req, res) => {
     res.status(200).json({
       merchants,
     });
-  }
-  catch (error: any) {
+  } catch (error: any) {
     logger.error("Get merchants filter error:", error);
     res.status(500).json({
       error: "Failed to fetch merchants filter",
@@ -209,37 +216,39 @@ router.get("/", async (req, res) => {
   try {
     const page: number = parseInt(req.query.page as string) || 1;
     const limit: number = parseInt(req.query.limit as string) || 10;
-    const orgCodeFIlter = req.query.orgCode as string || ""
+    const orgCodeFIlter = (req.query.orgCode as string) || "";
     const offset: number = page * limit - limit;
-    const timeFilter: string = req.query.filter as string
-    let orgCodeString = ""
-    if(orgCodeFIlter===""){
+    const timeFilter: string = req.query.filter as string;
+    let orgCodeString = "";
+    if (orgCodeFIlter === "") {
       const orgCodes = await influxDBService.getOrgCodes(offset, limit);
-      orgCodeString = orgCodes.map((row: any) => row.value).join(',');
+      orgCodeString = orgCodes.map((row: any) => row.value).join(",");
+    } else {
+      orgCodeString = orgCodeFIlter;
     }
-    else{
-      orgCodeString = orgCodeFIlter
-    }
-    const ezetapResponse: EzetapApiResponse = await post(`${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`, {
-      "username": `${process.env.EZETAP_USERNAME}`,
-      "password": `${process.env.EZETAP_PASSWORD}`
-    },
+    const ezetapResponse: EzetapApiResponse = (await post(
+      `${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`,
       {
-        "orgCodes": orgCodeString,
-        "filter": timeFilter
-      }) as EzetapApiResponse ;
+        username: `${process.env.EZETAP_USERNAME}`,
+        password: `${process.env.EZETAP_PASSWORD}`,
+      },
+      {
+        orgCodes: orgCodeString,
+        filter: timeFilter,
+      },
+    )) as EzetapApiResponse;
 
     // Process the EZETAP response to match UI requirements
-    const processedMerchants = processEzetapResponse(ezetapResponse);
+    const processedMerchants: ProcessedMerchantData[] =
+      processEzetapResponse(ezetapResponse);
 
     res.json({
       merchants: processedMerchants,
       total: processedMerchants.length,
       page,
       limit,
-      timeFilter
-    })
-
+      timeFilter,
+    });
   } catch (error: any) {
     logger.error("Get merchants error:", error);
     res.status(500).json({
@@ -248,6 +257,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+// the below api is redundant and can be used later
 /**
  * @swagger
  * /api/merchants/{orgCode}:

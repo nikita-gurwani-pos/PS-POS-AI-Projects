@@ -1,6 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import dotenv from 'dotenv';
 import EventEmitter from 'events';
+import logger from "../utils/logger";
 
 dotenv.config();
 
@@ -29,6 +30,16 @@ class CoraLogixMCPConnection extends EventEmitter {
       console.warn('Already connected');
       return;
     }
+
+    console.log("👉 Command:", [
+      'npx',
+      'mcp-remote',
+      process.env.CORALOGIX_MCP_API as string,
+      '--header',
+      'Authorization:${CORALOGIX_API_KEY}'
+    ]);
+    console.log("👉 Env:", { CORALOGIX_API_KEY: this.apiKey });
+    
 
     this.proc = spawn('npx', [
       'mcp-remote',
@@ -90,9 +101,16 @@ class CoraLogixMCPConnection extends EventEmitter {
         id: "init_1",
         method: "initialize",
         params: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: "2025-06-18",
           capabilities: {
-            tools: {}
+            tools: true,
+            prompts: true,
+            resources: true,
+            logging: false,
+            elicitation: {},
+            roots: {
+              listChanged: false
+            }
           },
           clientInfo: {
             name: "merchant-health-dashboard",
@@ -101,7 +119,9 @@ class CoraLogixMCPConnection extends EventEmitter {
         }
       };
 
-      await this.sendRawRequest(initRequest);
+      const initResponse = await this.sendRawRequest(initRequest);
+      logger.info("MCP session initialization response", initResponse);
+
       
       // Step 2: Get available tools
       const toolsRequest = {
@@ -113,6 +133,8 @@ class CoraLogixMCPConnection extends EventEmitter {
 
       const toolsResponse = await this.sendRawRequest(toolsRequest);
       this.availableTools = toolsResponse.tools || [];
+      logger.info('[DEBUG] Raw tools/list response:', JSON.stringify(toolsResponse, null, 2));
+
 
       // Step 3: Read Dataprime documentation
       try {
@@ -146,6 +168,9 @@ class CoraLogixMCPConnection extends EventEmitter {
    * Send raw MCP request (for initialization)
    */
   private async sendRawRequest(request: any): Promise<any> {
+
+    logger.info("request to sendRawRequest", request);
+
     return new Promise((resolve, reject) => {
       if (!this.proc || !this.proc.stdin.writable) {
         reject(new Error('Process is not connected or stdin not writable'));

@@ -46,6 +46,14 @@ class InfluxDBService {
     }
   }
 
+  public async getConnection(): Promise<InfluxDB> {
+    if (!this.isConnected || !this.client) {
+      this.init();
+      return this.client!;
+    }
+    return this.client;
+  }
+
   async query(sqlQuery: string): Promise<QueryResult[]> {
     if (!this.isConnected || !this.client) {
       throw new Error("InfluxDB not connected");
@@ -207,8 +215,10 @@ class InfluxDBService {
     }
   }
 
-  async getConfigSR(orgCode: string, timeFilter?: string): Promise<QueryResult[]> {
-
+  async getConfigSR(
+    orgCode: string,
+    timeFilter?: string,
+  ): Promise<QueryResult[]> {
     let query = `
       SELECT sum("count") as success
 FROM "http_client_requests"
@@ -233,7 +243,6 @@ fill(0)`;
     const results = await this.query(query);
     const cleanedResults = results.map(({ time, ...rest }) => rest);
     return mergeSuccessAndErrors(cleanedResults);
-
   }
 }
 
@@ -251,7 +260,7 @@ function mergeSuccessAndErrors(Results: any[]): any[] {
         description: item.description,
         fetch_key: item.fetch_key,
         org_code: item.org_code,
-        [key]: item[key]
+        [key]: item[key],
       };
     }
 
@@ -265,20 +274,23 @@ function mergeSuccessAndErrors(Results: any[]): any[] {
 
   const allKeys = new Set([
     ...Object.keys(successData),
-    ...Object.keys(errorData)
+    ...Object.keys(errorData),
   ]);
 
   for (const key of allKeys) {
-    const successRate = successData[key].success * 100/((errorData[key].errors+successData[key].success) == 0 ? 1 : (errorData[key].errors+successData[key].success));
+    const successRate =
+      (successData[key].success * 100) /
+      (errorData[key].errors + successData[key].success == 0
+        ? 1
+        : errorData[key].errors + successData[key].success);
     merged.push({
       ...successData[key],
       ...errorData[key],
-      successRate: Math.round(successRate)
+      successRate: Math.round(successRate),
     });
   }
 
   return merged;
 }
-
 
 export default new InfluxDBService();

@@ -1,0 +1,106 @@
+<#assign isPaidBookingEnabled=true>
+<#assign void = utils.printLog(output)>
+<#if httpStatus?? && httpStatus==200>
+   <#assign output = output?eval/>
+   <#if output.error?? && output.error?size != 0>
+       <#assign code = output.error.code!'Default error code'>
+       <#assign message = output.error.message!'something went wrong'>
+       <#assign errJson = printErrorMessage(code, message)>
+       ${errJson}
+   <#elseif output.data?? && output.data?has_content>
+       <#assign void = setSuccess(true) >
+       <#if output.data.eligibility.availableGuest gt 0>
+            <#assign complimentaryGuest = output.data.eligibility.availableGuest>
+       <#else>
+            <#assign complimentaryGuest = 0>
+       </#if>
+       <#if output.data.eligibility.availablePrimary gt 0>
+            <#assign complimentaryPrimary = 1>
+       <#else>
+            <#if complimentaryGuest gt 0>
+                <#assign complimentaryPrimary = 1>
+                <#assign complimentaryGuest = complimentaryGuest - 1>
+            <#else>
+                <#assign complimentaryPrimary = 0>
+            </#if>
+       </#if>
+       <#assign paxCountComplimentary = 0>
+       <#assign paxCountPaid = 0>
+       <#if complimentaryPrimary gt 0>
+            <#assign paxCountComplimentary = paxCountComplimentary + 1>
+       <#else>
+            <#assign paxCountPaid = paxCountPaid + 1>
+       </#if>
+       <#assign inPaxCount = (input.data.payload.paxCount!'0')?number/>
+       <#if inPaxCount gt 1>
+            <#assign guestCount = inPaxCount - 1>
+            <#if complimentaryGuest gte guestCount>
+                <#assign paxCountComplimentary = paxCountComplimentary + guestCount>
+            <#else>
+                <#assign paxCountComplimentary = paxCountComplimentary + complimentaryGuest>
+                <#assign paxCountPaid = paxCountPaid + (guestCount - complimentaryGuest)>
+            </#if>
+       </#if>
+       <#assign eligibility_resp_id = (output.request_id??) ? output.request_id : (random?long + "_" + now?long)>
+       <#assign paxCountPaid = (output.data.pax_data.paidPrimaryCount!0) + (output.data.pax_data.paidGuestCount!0)>
+       <#assign paxCountComplimentary = (output.data.pax_data.cardholder_pax!0) + (output.data.pax_data.guest_pax!0) + (output.data.pax_data.part_primary_pax!0) + (output.data.pax_data.part_primary_guest_pax!0)>
+       <#assign responseData = {
+            "maxComplimentaryEligibility" : output.data.eligibility.maxPrimary,
+            "maxAddOnsEligibility" : output.data.eligibility.maxGuest,
+            "maxAddOnsPerVisit" : output.data.eligibility.maxGuestPerVisit,
+            "eligibleComplimentaryCount" : output.data.eligibility.availablePrimary,
+            "eligibleAddOns" : output.data.eligibility.availableGuest,
+            "currencyCode" : output.data.fees.currencyCode,
+            "complementaryFee" : output.data.fees.complimentary,
+            "guestFee" : output.data.fees.paid,
+            "totalComplimentaryAmount" : output.data.amount.complimentary,
+            "totalGuestAmount" : output.data.amount.paid,
+            "totalAmount" : output.data.amount.total,
+            "paxCountPaid" : paxCountPaid,
+            "paxCountComplimentary" : paxCountComplimentary,
+            "isPaidBookingEnabled":isPaidBookingEnabled,
+            "isTFS" : true,
+            "eligibilityResponseId": eligibility_resp_id
+        }>
+       {
+           "data" : ${utils.getStringJSON(responseData)}
+       }
+   <#else>
+       <#assign code = 'DATA MISSING'>
+       <#assign message = 'Data is missing'>
+       <#assign errJson = printErrorMessage(code, message)>
+       ${errJson}
+   </#if>
+<#elseif httpStatus?? && httpStatus?string?starts_with('4')>
+       <#assign defaultCode = httpStatus?string + ' Error' output=output?eval>
+       <#assign code = output.error.errorCode!output.error.code!defaultCode>
+       <#assign message = output.error.errorMessage!output.error.message!'Something went wrong.'>
+       <#assign errJson = printErrorMessage(code, message)>
+       ${errJson}
+<#elseif httpStatus?? && httpStatus == 500>
+    <#if output.error??>
+       <#assign defaultCode = httpStatus?string + ' Error'>
+       <#assign code = output.error.errorCode!defaultCode>
+       <#assign message = output.error.errorMessage!'Something went wrong.'>
+       <#assign errJson = printErrorMessage(code, message)>
+       ${errJson}
+    <#else>
+       <#assign defaultCode = httpStatus?string + ' Error'>
+       <#assign code = output.code!defaultCode>
+       <#assign message = output.message!'Something went wrong.'>
+       <#assign errJson = printErrorMessage(code, message)>
+       ${errJson}
+    </#if>
+<#else>
+   <#assign code = "Error from Merchant" >
+   <#assign msg = "Failed from Merchant side">
+   <#assign errJson = printErrorMessage(code, msg) >
+   ${errJson}
+</#if>
+<#function printErrorMessage code msg>
+    <#assign void = setSuccess(false) >
+    <#assign void = setErrorCode(code) >
+    <#assign void = setErrorMessage(msg) >
+    <#assign err='{"ErrorCode" : "'+code+'","Message" : "' + msg + '"}'>
+    <#return err>
+</#function>

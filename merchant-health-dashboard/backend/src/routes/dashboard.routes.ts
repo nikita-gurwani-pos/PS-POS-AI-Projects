@@ -1,3 +1,4 @@
+// This routeer is for 2nd page when user clicks on more details against the orgcode in the first page
 import express from "express";
 import { z } from "zod";
 import influxDBService from "../services/influxdb.service";
@@ -25,18 +26,18 @@ const dashboardQuerySchema = z.object({
  *     summary: Get merchant health dashboard overview
  *     description: |
  *       Retrieve comprehensive health metrics for a specific merchant organization.
- *       
+ *
  *       **Key Metrics:**
  *       - Total request volume and success rates
  *       - Average response times and performance indicators
  *       - Error counts and failure analysis
  *       - Request type breakdown (Normal, Txn_posting, Logtickets)
- *       
+ *
  *       **Data Sources:**
  *       - InfluxDB time-series data
  *       - Real-time merchant transaction logs
  *       - Historical performance trends
- *       
+ *
  *       **Use Cases:**
  *       - Monitor merchant health status
  *       - Identify performance bottlenecks
@@ -294,7 +295,7 @@ router.get("/configSR", async (req, res) => {
 
     if (!orgCode || !timeFilter) {
       return res.status(400).json({
-        error: "Missing required parameters: orgCode and filter"
+        error: "Missing required parameters: orgCode and filter",
       });
     }
 

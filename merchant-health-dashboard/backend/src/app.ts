@@ -12,7 +12,7 @@ import promptRoutes from './routes/prompt.routes';
 import errorMiddleware from './middleware/error.middleware';
 import logger from './utils/logger';
 import { setupSwagger } from './config/swagger';
-import CoraLogixMCPConnection from './mcp/mcpConnect';
+import CoralogixMCPClient from './mcp/coralogix-mcp';
 
 dotenv.config();
 
@@ -50,11 +50,8 @@ app.use((req, res, next) => {
 // Setup Swagger documentation
 setupSwagger(app);
 
-const coralogixMCP = CoraLogixMCPConnection.getConnectionObject();
-coralogixMCP.on('stdout', (data) => console.log('[stdout]', data));
-coralogixMCP.on('stderr', (data) => console.error('[stderr]', data));
-coralogixMCP.on('close', (code) => console.log(`Process closed with code ${code}`));
-coralogixMCP.on('error', (err) => console.error('Process error:', err));
+const coralogixMCP = CoralogixMCPClient.getConnectionObject();
+coralogixMCP.on('error', (err) => logger.error('MCP error:', err));
 
 // Initialize MCP connection
 coralogixMCP.initialize().then(() => {
@@ -151,12 +148,12 @@ const server = app.listen(PORT, () => {
 });
 
 // Graceful shutdown handling
-const gracefulShutdown = (signal: string) => {
+const gracefulShutdown = async (signal: string) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
   
-  server.close(() => {
+  server.close(async () => {
     logger.info('HTTP server closed.');
-    coralogixMCP.disconnect();
+    await coralogixMCP.close();
     process.exit(0);
   });
 

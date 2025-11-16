@@ -1,10 +1,10 @@
-import express from 'express';
-import { z } from 'zod';
-import logger from '../utils/logger';
-import { authenticateToken } from '../middleware/auth.middleware';
-import { coralogixMCP } from '../app';
-import { getTokenExpiry } from '../routes/auth.routes';
-import LLMService from '../services/llm.service';
+import express from "express";
+import { z } from "zod";
+import logger from "../utils/logger";
+import { authenticateToken } from "../middleware/auth.middleware";
+import { coralogixMCP } from "../app";
+import { getTokenExpiry } from "../routes/auth.routes";
+import LLMService from "../services/llm.service";
 const router = express.Router();
 
 // Session management for automatic date initialization
@@ -26,11 +26,13 @@ function getMcpSession(token: string): McpSession {
     const newSession: McpSession = {
       token,
       sessionStart,
-      sessionEnd
+      sessionEnd,
     };
 
     mcpSessions.set(token, newSession);
-    logger.info(`Created new 6-hour session for Token: ${token}: ${sessionStart.toISOString()} to ${sessionEnd.toISOString()}`);
+    logger.info(
+      `Created new 6-hour session for Token: ${token}: ${sessionStart.toISOString()} to ${sessionEnd.toISOString()}`,
+    );
     return newSession;
   }
   return existingSession;
@@ -42,10 +44,14 @@ function formatDateForCoralogix(date: Date): string {
 }
 
 // Helper function to extract timestamp from transaction ID
-function extractTimestampFromTransactionId(transactionId: string): { startDate: Date; endDate: Date } | null {
+function extractTimestampFromTransactionId(
+  transactionId: string,
+): { startDate: Date; endDate: Date } | null {
   // Transaction ID format: yymmddhhmmss + additional characters
   // Example: 251004150441756E739681790 -> 25-10-04 15:04:41
-  const match = transactionId.match(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  const match = transactionId.match(
+    /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/,
+  );
 
   if (!match) {
     return null;
@@ -71,7 +77,7 @@ function extractTimestampFromTransactionId(transactionId: string): { startDate: 
 
 // Validation schema
 const promptSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required'),
+  prompt: z.string().min(1, "Prompt is required"),
 });
 
 /**
@@ -103,7 +109,7 @@ const promptSchema = z.object({
  *           maximum: 1000
  *           description: Maximum number of results
  *           example: 50
- *     
+ *
  *     PromptResponse:
  *       type: object
  *       properties:
@@ -136,20 +142,20 @@ const promptSchema = z.object({
  *     summary: Execute AI-powered natural language query
  *     description: |
  *       Process natural language queries using AI to analyze transaction data, search logs, and provide intelligent insights.
- *       
+ *
  *       **Key Features:**
  *       - **Smart Transaction Analysis**: Automatically extracts timestamps from transaction IDs (yymmddhhmmss format)
  *       - **Intelligent Time Range**: Uses transaction timestamp ± 2 hours for optimal search results
  *       - **Natural Language Processing**: Converts complex queries into structured MCP requests
  *       - **Real-time Log Analysis**: Searches Coralogix logs using DataPrime syntax
  *       - **AI Response Formatting**: Converts technical log data into business-friendly explanations
- *       
+ *
  *       **Supported Query Types:**
  *       - Transaction status checks: "is this transaction 251004150441756E739681790 posted"
  *       - Log searches: "show me errors for merchant ABC123"
  *       - Performance analysis: "what's the success rate for today"
  *       - Custom queries: Any natural language question about your transaction data
- *       
+ *
  *       **Transaction ID Format:**
  *       - Format: `yymmddhhmmss` + additional characters
  *       - Example: `251004150441756E739681790` = 2025-10-04 15:04:41
@@ -286,10 +292,13 @@ const promptSchema = z.object({
  *               prompt: "is this transaction 251004150441756E739681790 posted"
  *               timestamp: "2025-10-04T17:02:48.305Z"
  */
-router.post('/', authenticateToken, async (req, res) => {
-  let prompt = '';
+router.post("/", authenticateToken, async (req, res) => {
+  let prompt = "";
   try {
-    const token: string = req.headers.authorization?.replace('Bearer ', '') as string;
+    const token: string = req.headers.authorization?.replace(
+      "Bearer ",
+      "",
+    ) as string;
     const parsedBody = promptSchema.parse(req.body);
     prompt = parsedBody.prompt;
 
@@ -298,7 +307,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Ensure MCP is initialized
     if (!coralogixMCP.isMCPInitialized()) {
-      logger.info('MCP not initialized, initializing now...');
+      logger.info("MCP not initialized, initializing now...");
       await coralogixMCP.initialize();
     }
 
@@ -310,7 +319,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const transactionIdMatch = prompt.match(/\b(\d{12,})\b/);
     let searchContext = {
       sessionStart: mcpSession.sessionStart,
-      sessionEnd: mcpSession.sessionEnd
+      sessionEnd: mcpSession.sessionEnd,
     };
 
     if (transactionIdMatch) {
@@ -320,79 +329,121 @@ router.post('/', authenticateToken, async (req, res) => {
       if (timestampRange) {
         searchContext = {
           sessionStart: timestampRange.startDate,
-          sessionEnd: timestampRange.endDate
+          sessionEnd: timestampRange.endDate,
         };
-        logger.info(`Using transaction timestamp range: ${timestampRange.startDate.toISOString()} to ${timestampRange.endDate.toISOString()}`);
+        logger.info(
+          `Using transaction timestamp range: ${timestampRange.startDate.toISOString()} to ${timestampRange.endDate.toISOString()}`,
+        );
       }
     }
 
-    // Step 1: Convert natural language to MCP request
-    logger.info('Step 1: Converting prompt to MCP request...');
-    const mcpRequest = await llmService.convertPromptToMCPRequest(prompt, searchContext);
-    logger.info(`Converted to MCP request: ${JSON.stringify(mcpRequest)}`);
+    // Step 1: Classify if prompt needs MCP processing
+    logger.info("Step 1: Classifying prompt...");
+    const classification = await llmService.classifyPrompt(prompt);
+    logger.info(`Prompt classification: ${JSON.stringify(classification)}`);
 
-    // Step 2: Send MCP request and get response
-    logger.info('Step 2: Sending MCP request...');
-    const mcpResponse = await coralogixMCP.sendMCPRequest(mcpRequest.method, mcpRequest.params);
-    logger.info(`Received MCP response: ${JSON.stringify(mcpResponse)}`);
+    let naturalLanguageResponse: string;
 
-    // Step 3: Format MCP response to natural language
-    logger.info('Step 3: Formatting MCP response...');
-    const naturalLanguageResponse = await llmService.formatMCPResponse(
-      { result: mcpResponse },
-      prompt
-    );
-    logger.info('Step 3: Completed formatting MCP response');
+    if (!classification.needsMCP) {
+      // Handle conversational prompts directly
+      logger.info("Step 2: Handling conversational prompt...");
+      naturalLanguageResponse =
+        await llmService.handleConversationalPrompt(prompt);
+      logger.info("Step 2: Completed conversational response");
+    } else {
+      // Process analytical prompts through MCP
+      logger.info("Step 2: Converting prompt to MCP request...");
+      const mcpRequest = await llmService.convertPromptToMCPRequest(
+        prompt,
+        searchContext,
+      );
+      logger.info(`Converted to MCP request: ${JSON.stringify(mcpRequest)}`);
+
+      // Step 3: Send MCP request and get response
+      logger.info("Step 3: Sending MCP request...");
+      logger.info(
+        `[DEBUG] Full MCP request being sent: ${JSON.stringify(mcpRequest, null, 2)}`,
+      );
+      let mcpResponse;
+      try {
+        mcpResponse = await coralogixMCP.sendMCPRequest(
+          mcpRequest.method,
+          mcpRequest.params,
+        );
+        logger.info(`Received MCP response: ${JSON.stringify(mcpResponse)}`);
+      } catch (error: any) {
+        logger.error(`[DEBUG] MCP request failed: ${error.message}`);
+        logger.error(
+          `[DEBUG] Request that failed: ${JSON.stringify(mcpRequest, null, 2)}`,
+        );
+        throw error;
+      }
+
+      // Step 4: Format MCP response to natural language
+      logger.info("Step 4: Formatting MCP response...");
+      naturalLanguageResponse = await llmService.formatMCPResponse(
+        { result: mcpResponse },
+        prompt,
+      );
+      logger.info("Step 4: Completed formatting MCP response");
+    }
 
     const executionTime = Date.now() - startTime;
 
     const response = {
       success: true,
       data: {
-        naturalLanguageResponse
+        naturalLanguageResponse,
       },
       prompt,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     res.json(response);
   } catch (error: any) {
-    if (error.name === 'ZodError') {
+    if (error.name === "ZodError") {
       return res.status(400).json({
-        error: 'Invalid request parameters',
-        details: error.errors
+        error: "Invalid request parameters",
+        details: error.errors,
       });
     }
 
-    logger.error('Prompt execution error:', error);
+    logger.error("Prompt execution error:", error);
 
     // Handle different types of errors
-    if (error.message.includes('MCP Error') || error.message.includes('timeout')) {
+    if (
+      error.message.includes("MCP Error") ||
+      error.message.includes("timeout")
+    ) {
       return res.status(503).json({
         success: false,
-        error: 'MCP server error',
+        error: "MCP server error",
         message: error.message,
         prompt,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
-    if (error.message.includes('Google') || error.message.includes('Gemini') || error.message.includes('LLM')) {
+    if (
+      error.message.includes("Google") ||
+      error.message.includes("Gemini") ||
+      error.message.includes("LLM")
+    ) {
       return res.status(503).json({
         success: false,
-        error: 'LLM service error',
+        error: "LLM service error",
         message: error.message,
         prompt,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
     res.status(500).json({
       success: false,
-      error: 'Failed to execute prompt',
+      error: "Failed to execute prompt",
       message: error.message,
       prompt,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -419,21 +470,23 @@ router.post('/', authenticateToken, async (req, res) => {
  *                   type: string
  *                   format: date-time
  */
-router.get('/status', authenticateToken, async (req, res) => {
+router.get("/status", authenticateToken, async (req, res) => {
   try {
-    // Check if coralogixMCP process is running
-    const connected = coralogixMCP && coralogixMCP.listenerCount('stdout') > 0;
+    // Check if coralogixMCP is initialized
+    const connected = coralogixMCP && coralogixMCP.isMCPInitialized();
 
     res.json({
       connected,
       timestamp: new Date().toISOString(),
-      message: connected ? 'MCP connection is active' : 'MCP connection is not active'
+      message: connected
+        ? "MCP connection is active"
+        : "MCP connection is not active",
     });
   } catch (error: any) {
-    logger.error('Failed to get connection status:', error);
+    logger.error("Failed to get connection status:", error);
     res.status(500).json({
-      error: 'Failed to get connection status',
-      message: error.message
+      error: "Failed to get connection status",
+      message: error.message,
     });
   }
 });
@@ -465,39 +518,220 @@ router.get('/status', authenticateToken, async (req, res) => {
  *                       prompt:
  *                         type: string
  */
-router.get('/examples', authenticateToken, async (req, res) => {
+router.get("/examples", authenticateToken, async (req, res) => {
   const examples = [
     {
       title: "Check Transaction Status",
       description: "Check if a specific transaction has been posted",
-      prompt: "Show me logs for transaction 250928190448714E410380693"
+      prompt: "Show me logs for transaction 250928190448714E410380693",
     },
     {
       title: "Find Error Logs",
       description: "Find all error logs",
-      prompt: "Show me all error logs"
+      prompt: "Show me all error logs",
     },
     {
       title: "ConfigApps Posting Logs",
       description: "Find all successful posting logs in ConfigApps",
-      prompt: "Show me posting successful logs in configapps"
+      prompt: "Show me posting successful logs in configapps",
     },
     {
       title: "DataPrime Query",
       description: "Execute a direct DataPrime query",
-      prompt: "source logs | filter $l.applicationname == 'prod-configapps' | filter $m.severity == ERROR | limit 10"
+      prompt:
+        "source logs | filter $l.applicationname == 'prod-configapps' | filter $m.severity == ERROR | limit 10",
     },
     {
       title: "Search by Application",
       description: "Search logs for a specific application",
-      prompt: "Show me logs from configapps"
-    }
+      prompt: "Show me logs from configapps",
+    },
   ];
 
   res.json({
     examples,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
+});
+
+/**
+ * @swagger
+ * /api/coralogix/prompt/org/summary/{orgCode}:
+ *   get:
+ *     summary: Get Coralogix summary for a specific organization
+ *     description: |
+ *       Provides a status-card style summary with positive and negative insights for the given orgCode, using AI-powered log analysis.
+ *       The summary includes:
+ *         - One positive insight (e.g., successful payments, successful postings)
+ *         - One negative insight (e.g., timeouts, failures)
+ *         - A short summary in status-card style (max 3 lines, with emoji indicators)
+ *         - If data is missing, responds with: “No recent activity for this org_code.”
+ *     tags: [AI & Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: TFSYAMUNA_78897285
+ *         description: Organization code to summarize
+ *     responses:
+ *       200:
+ *         description: Summary generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     naturalLanguageResponse:
+ *                       type: string
+ *                 prompt:
+ *                   type: string
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Invalid request parameters
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/org/summary/:orgCode", authenticateToken, async (req, res) => {
+  const { orgCode } = req.params;
+  const prompt = `Summary for orgCode: ${orgCode}`;
+  try {
+    const token: string = req.headers.authorization?.replace(
+      "Bearer ",
+      "",
+    ) as string;
+
+    const llmService = LLMService.getInstance();
+
+    // Ensure MCP is initialized
+    if (!coralogixMCP.isMCPInitialized()) {
+      logger.info("MCP not initialized, initializing now...");
+      await coralogixMCP.initialize();
+    }
+
+    logger.info(`Executing Coralogix summary for org ${orgCode}`);
+
+    const startTime = Date.now();
+    const start_time = new Date(startTime - 1 * 60 * 60 * 1000).toISOString();
+    const end_time = new Date(startTime).toISOString();
+    const searchContext = {
+      start_time: start_time,
+      end_time: end_time,
+    };
+    logger.info("Step 1: converting to mcp request");
+    const mcpRequest = await llmService.generateMCPRequestForSummaryForOrg(
+      orgCode,
+      searchContext,
+    );
+    logger.info(`Converted to MCP request: ${JSON.stringify(mcpRequest)}`);
+
+    // Step 3: Send MCP request and get response
+    logger.info("Step 2: Sending MCP request...");
+    logger.info(
+      `[DEBUG] Full MCP request being sent: ${JSON.stringify(mcpRequest, null, 2)}`,
+    );
+    let mcpResponse;
+    try {
+      mcpResponse = await coralogixMCP.sendMCPRequest(
+        mcpRequest.method,
+        mcpRequest.params,
+      );
+      logger.info(`Received MCP response: ${JSON.stringify(mcpResponse)}`);
+    } catch (error: any) {
+      logger.error(`[DEBUG] MCP request failed: ${error.message}`);
+      logger.error(
+        `[DEBUG] Request that failed: ${JSON.stringify(mcpRequest, null, 2)}`,
+      );
+      throw error;
+    }
+
+    // Step 4: Format MCP response to natural language
+    logger.info("Step 3: Formatting MCP response...");
+    const naturalLanguageResponse: string = await llmService.formatMCPResponse(
+      { result: mcpResponse },
+      `  Task:
+      1. Analyze the logs to understand what’s happening for this org_code.
+      2. Provide **one positive insight** (e.g., successful payments : check this in api-server application, successful postings : check this in prod-configapps application, etc).
+      3. Provide **one negative insight** (e.g., timeouts, failures, etc).
+      4. Write a short summary in a **status-card style**, no more than 3 lines, with emoji indicators.
+      5. If data is missing or empty, respond with: “No recent activity for this org_code.
+
+      Output Format:
+       🔍 Org Activity Summary (Last 1h) for {{org_code}}
+       ✅ [positive insight]
+       ⚠️ [negative insight]
+       💡 Suggestion: [optional, actionable hint]`,
+    );
+    logger.info("Completed formatting MCP response");
+
+    const executionTime = Date.now() - startTime;
+
+    const response = {
+      success: true,
+      data: {
+        naturalLanguageResponse,
+      },
+      prompt,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json(response);
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        error: "Invalid request parameters",
+        details: error.errors,
+      });
+    }
+
+    logger.error("Prompt execution error:", error);
+
+    // Handle different types of errors
+    if (
+      error.message.includes("MCP Error") ||
+      error.message.includes("timeout")
+    ) {
+      return res.status(503).json({
+        success: false,
+        error: "MCP server error",
+        message: error.message,
+        prompt,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (
+      error.message.includes("Google") ||
+      error.message.includes("Gemini") ||
+      error.message.includes("LLM")
+    ) {
+      return res.status(503).json({
+        success: false,
+        error: "LLM service error",
+        message: error.message,
+        prompt,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: "Failed to execute prompt",
+      message: error.message,
+      prompt,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 export default router;
