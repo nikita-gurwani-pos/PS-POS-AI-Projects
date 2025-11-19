@@ -11,6 +11,7 @@ import {
   processEzetapResponse,
   EzetapApiResponse,
   ProcessedMerchantData,
+  calculateHealthStatus,
 } from "../utils/utils";
 
 const router = express.Router();
@@ -220,27 +221,92 @@ router.get("/", async (req, res) => {
     const offset: number = page * limit - limit;
     const timeFilter: string = req.query.filter as string;
     let orgCodeString = "";
+    let orgCodes: string[] = [];
+    
     if (orgCodeFIlter === "") {
-      const orgCodes = await influxDBService.getOrgCodes(offset, limit);
-      orgCodeString = orgCodes.map((row: any) => row.value).join(",");
+      const orgCodeResults = await influxDBService.getOrgCodes(offset, limit);
+      orgCodes = orgCodeResults.map((row: any) => row.value);
+      orgCodeString = orgCodes.join(",");
     } else {
+      orgCodes = [orgCodeFIlter];
       orgCodeString = orgCodeFIlter;
     }
-    const ezetapResponse: EzetapApiResponse = (await post(
-      `${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`,
-      {
-        username: `${process.env.EZETAP_USERNAME}`,
-        password: `${process.env.EZETAP_PASSWORD}`,
-      },
-      {
-        orgCodes: orgCodeString,
-        filter: timeFilter,
-      },
-    )) as EzetapApiResponse;
 
-    // Process the EZETAP response to match UI requirements
-    const processedMerchants: ProcessedMerchantData[] =
-      processEzetapResponse(ezetapResponse);
+    let processedMerchants: ProcessedMerchantData[] = [];
+
+    // Check if EZETAP API is configured
+    if (process.env.EZETAP_API_URL) {
+      try {
+        const ezetapResponse: EzetapApiResponse = (await post(
+          `${process.env.EZETAP_API_URL}/transactions/getTxnsHealthByOrg`,
+          {
+            username: `${process.env.EZETAP_USERNAME}`,
+            password: `${process.env.EZETAP_PASSWORD}`,
+          },
+          {
+            orgCodes: orgCodeString,
+            filter: timeFilter,
+          },
+        )) as EzetapApiResponse;
+
+        // Process the EZETAP response to match UI requirements
+        processedMerchants = processEzetapResponse(ezetapResponse);
+      } catch (ezetapError: any) {
+        logger.warn("EZETAP API call failed, falling back to InfluxDB:", ezetapError.message);
+        // Fall through to InfluxDB fallback
+      }
+    }
+
+    // Fallback to InfluxDB if EZETAP is not configured or failed
+    if (processedMerchants.length === 0) {
+      // Build time filter for InfluxDB
+      const influxTimeFilter = timeFilter 
+        ? influxDBService.buildTimeFilter(
+            new Date(Date.now() - getTimeFilterInMs(timeFilter)).toISOString(),
+            new Date().toISOString()
+          )
+        : influxDBService.buildTimeFilter(
+            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            new Date().toISOString()
+          );
+
+      // Get merchant data from InfluxDB
+      const merchantPromises = orgCodes.map(async (orgCode) => {
+        try {
+          const [successResult, errorResult] = await Promise.all([
+            influxDBService.getMerchantRequests(orgCode, influxTimeFilter, true),
+            influxDBService.getMerchantRequests(orgCode, influxTimeFilter, false),
+          ]);
+
+          const successfulTxns = successResult[0]?.total_requests || 0;
+          const failedTxns = errorResult[0]?.total_requests || 0;
+          const pendingTxns = 0; // InfluxDB doesn't track pending separately
+          
+          const health = calculateHealthStatus(successfulTxns, failedTxns);
+
+          return {
+            orgCode,
+            successfulTxns,
+            failedTxns,
+            pendingTxns,
+            healthStatus: health.status as 'Good' | 'Warning' | 'Critical' | 'Unknown',
+            healthColor: health.color,
+          };
+        } catch (error) {
+          logger.error(`Error fetching data for ${orgCode}:`, error);
+          return {
+            orgCode,
+            successfulTxns: 0,
+            failedTxns: 0,
+            pendingTxns: 0,
+            healthStatus: 'Unknown' as const,
+            healthColor: '#9E9E9E',
+          };
+        }
+      });
+
+      processedMerchants = await Promise.all(merchantPromises);
+    }
 
     res.json({
       merchants: processedMerchants,
@@ -256,6 +322,35 @@ router.get("/", async (req, res) => {
     });
   }
 });
+
+// Helper function to convert time filter string to milliseconds
+function getTimeFilterInMs(filter: string): number {
+  // Handle "1hr" format
+  if (filter.endsWith('hr')) {
+    const value = parseInt(filter.replace('hr', ''));
+    return value * 60 * 60 * 1000;
+  }
+  
+  // Handle standard format: 30d, 7d, 1d, 6h, 10m, 1m
+  const match = filter.match(/^(\d+)([dhms])$/);
+  if (!match) return 24 * 60 * 60 * 1000; // Default to 24 hours
+
+  const value = parseInt(match[1]);
+  const unit = match[2];
+
+  switch (unit) {
+    case 'd':
+      return value * 24 * 60 * 60 * 1000;
+    case 'h':
+      return value * 60 * 60 * 1000;
+    case 'm':
+      return value * 60 * 1000;
+    case 's':
+      return value * 1000;
+    default:
+      return 24 * 60 * 60 * 1000;
+  }
+}
 
 // the below api is redundant and can be used later
 /**

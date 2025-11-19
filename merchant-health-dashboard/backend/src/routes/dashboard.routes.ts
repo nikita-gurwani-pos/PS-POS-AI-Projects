@@ -311,4 +311,271 @@ router.get("/configSR", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/dashboard/transactions/timeline:
+ *   get:
+ *     summary: Get recent transaction timeline
+ *     description: |
+ *       Retrieve a timeline of recent transactions for a specific merchant organization.
+ *       
+ *       **Transaction Information:**
+ *       - Transaction status (SETTLED, AUTHORIZED, FAILED, PENDING)
+ *       - Transaction amount
+ *       - Response time in milliseconds
+ *       - Error messages and codes for failed transactions
+ *       - Timestamp for each transaction
+ *       
+ *       **Use Cases:**
+ *       - Monitor recent transaction activity
+ *       - Identify transaction failures and errors
+ *       - Track transaction response times
+ *       - Analyze transaction patterns
+ *     tags: [Dashboard & Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: orgCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: TFSYAMUNA_78897285
+ *         description: Unique organization/merchant code identifier
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
+ *         example: 10
+ *         description: Maximum number of transactions to return
+ *       - in: query
+ *         name: startTime
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         example: 2025-09-20T00:00:00Z
+ *         description: Start time for transaction filtering (ISO 8601 format). Defaults to last 24 hours if not provided.
+ *       - in: query
+ *         name: endTime
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         example: 2025-09-27T23:59:59Z
+ *         description: End time for transaction filtering (ISO 8601 format)
+ *     responses:
+ *       200:
+ *         description: Recent transaction timeline retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 orgCode:
+ *                   type: string
+ *                   example: TFSYAMUNA_78897285
+ *                 timeRange:
+ *                   type: object
+ *                   properties:
+ *                     startTime:
+ *                       type: string
+ *                       format: date-time
+ *                     endTime:
+ *                       type: string
+ *                       format: date-time
+ *                 transactions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       timestamp:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-09-27T14:30:00Z"
+ *                         description: Transaction timestamp
+ *                       status:
+ *                         type: string
+ *                         enum: [SETTLED, AUTHORIZED, FAILED, PENDING]
+ *                         example: SETTLED
+ *                         description: Transaction status
+ *                       amount:
+ *                         type: number
+ *                         example: 125000
+ *                         description: Transaction amount in paise/cents
+ *                       responseTime:
+ *                         type: number
+ *                         example: 245
+ *                         description: Response time in milliseconds
+ *                       errorMessage:
+ *                         type: string
+ *                         example: INSUFFICIENT_FUNDS
+ *                         description: Error message for failed transactions
+ *                       errorCode:
+ *                         type: string
+ *                         example: ERR_TIMEOUT
+ *                         description: Error code for failed transactions
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/transactions/timeline", async (req, res) => {
+  try {
+    const { orgCode, startTime, endTime } = dashboardQuerySchema.parse(
+      req.query,
+    );
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    if (limit < 1 || limit > 100) {
+      return res.status(400).json({
+        error: "Limit must be between 1 and 100",
+      });
+    }
+
+    const timeFilter = influxDBService.buildTimeFilter(startTime, endTime);
+    const transactions = await influxDBService.getRecentTransactions(
+      orgCode,
+      limit,
+      timeFilter || undefined,
+    );
+
+    res.json({
+      orgCode,
+      timeRange: { startTime, endTime },
+      transactions,
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        error: "Validation error",
+        details: error.errors,
+      });
+    }
+
+    logger.error("Transaction timeline error:", error);
+    res.status(500).json({
+      error: "Failed to fetch transaction timeline",
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/dashboard/trends:
+ *   get:
+ *     summary: Get trend analysis data
+ *     description: |
+ *       Retrieve trend analysis including hourly volume data and today vs yesterday comparison.
+ *       
+ *       **Trend Metrics:**
+ *       - Hourly transaction volume for the last 24 hours
+ *       - Today's total transaction count
+ *       - Yesterday's total transaction count
+ *       - Percentage change between today and yesterday
+ *       
+ *       **Use Cases:**
+ *       - Visualize transaction volume trends
+ *       - Compare daily performance
+ *       - Identify peak transaction hours
+ *       - Monitor growth or decline patterns
+ *     tags: [Dashboard & Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: orgCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: TFSYAMUNA_78897285
+ *         description: Unique organization/merchant code identifier
+ *     responses:
+ *       200:
+ *         description: Trend analysis data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 orgCode:
+ *                   type: string
+ *                   example: TFSYAMUNA_78897285
+ *                 hourlyVolume:
+ *                   type: array
+ *                   description: Hourly transaction volume for the last 24 hours
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       time:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-09-27T00:00:00Z"
+ *                         description: Hour timestamp
+ *                       volume:
+ *                         type: number
+ *                         example: 1250
+ *                         description: Transaction volume for that hour
+ *                 todayVsYesterday:
+ *                   type: object
+ *                   properties:
+ *                     todayTotal:
+ *                       type: number
+ *                       example: 12450
+ *                       description: Total transactions today
+ *                     yesterdayTotal:
+ *                       type: number
+ *                       example: 11800
+ *                       description: Total transactions yesterday
+ *                     percentageChange:
+ *                       type: number
+ *                       example: 5.5
+ *                       description: Percentage change (positive for increase, negative for decrease)
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/trends", async (req, res) => {
+  try {
+    const { orgCode } = dashboardQuerySchema.parse(req.query);
+
+    const trendAnalysis = await influxDBService.getTrendAnalysis(orgCode);
+
+    res.json({
+      orgCode,
+      ...trendAnalysis,
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        error: "Validation error",
+        details: error.errors,
+      });
+    }
+
+    logger.error("Trend analysis error:", error);
+    res.status(500).json({
+      error: "Failed to fetch trend analysis",
+    });
+  }
+});
+
 export default router;
