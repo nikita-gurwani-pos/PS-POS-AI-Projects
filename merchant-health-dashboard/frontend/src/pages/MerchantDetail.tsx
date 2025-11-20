@@ -66,7 +66,8 @@ export default function MerchantDetail() {
 
   const formatAmount = (amount?: number) => {
     if (!amount) return 'N/A';
-    return `$${(amount / 100).toFixed(2)}`;
+    // Amount is in paise, convert to rupees
+    return `₹${(amount / 100).toFixed(2)}`;
   };
 
   const formatResponseTime = (time: number) => {
