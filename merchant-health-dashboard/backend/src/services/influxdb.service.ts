@@ -73,13 +73,29 @@ class InfluxDBService {
   }
 
   // Helper method to build time filter
+  // Accepts ISO strings or InfluxDB relative time format
   buildTimeFilter(startTime?: string, endTime?: string): string {
     if (startTime && endTime) {
-      return `time >= '${startTime}' AND time <= '${endTime}'`;
+      // If it's already in InfluxDB format (e.g., "now() - 1d"), use it directly
+      if (startTime.includes('now()') || endTime.includes('now()')) {
+        return `${startTime} AND ${endTime}`;
+      }
+      // Otherwise, convert ISO strings to InfluxDB timestamp format
+      const start = new Date(startTime).getTime() * 1000000; // Convert to nanoseconds
+      const end = new Date(endTime).getTime() * 1000000;
+      return `time >= ${start} AND time <= ${end}`;
     } else if (startTime) {
-      return `time >= '${startTime}'`;
+      if (startTime.includes('now()')) {
+        return startTime;
+      }
+      const start = new Date(startTime).getTime() * 1000000;
+      return `time >= ${start}`;
     } else if (endTime) {
-      return `time <= '${endTime}'`;
+      if (endTime.includes('now()')) {
+        return endTime;
+      }
+      const end = new Date(endTime).getTime() * 1000000;
+      return `time <= ${end}`;
     }
     return "";
   }

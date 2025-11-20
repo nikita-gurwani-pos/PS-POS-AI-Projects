@@ -11,7 +11,8 @@
     "debug:brk": "npm run kill && nodemon --exec \"node --inspect-brk=0.0.0.0:9229 -r ts-node/register src/app.ts\"",
     "debug:vscode": "npm run kill && ts-node --inspect=9229 src/app.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "populate-mock-data": "ts-node -r dotenv/config src/scripts/populateMockData.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

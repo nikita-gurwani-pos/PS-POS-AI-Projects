@@ -259,16 +259,14 @@ router.get("/", async (req, res) => {
 
     // Fallback to InfluxDB if EZETAP is not configured or failed
     if (processedMerchants.length === 0) {
-      // Build time filter for InfluxDB
-      const influxTimeFilter = timeFilter 
-        ? influxDBService.buildTimeFilter(
-            new Date(Date.now() - getTimeFilterInMs(timeFilter)).toISOString(),
-            new Date().toISOString()
-          )
-        : influxDBService.buildTimeFilter(
-            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            new Date().toISOString()
-          );
+      // Build time filter for InfluxDB using relative time format
+      // Convert filter like "1d" or "1hr" to "now() - 1d" or "now() - 1h"
+      let influxTimeFilterStr = timeFilter || "1d";
+      // Convert "1hr" to "1h" for InfluxDB
+      if (influxTimeFilterStr.endsWith('hr')) {
+        influxTimeFilterStr = influxTimeFilterStr.replace('hr', 'h');
+      }
+      const influxTimeFilter = `time >= now() - ${influxTimeFilterStr} AND time <= now()`;
 
       // Get merchant data from InfluxDB
       const merchantPromises = orgCodes.map(async (orgCode) => {
