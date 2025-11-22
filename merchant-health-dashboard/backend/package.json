@@ -11,7 +11,8 @@
     "debug:brk": "npm run kill && nodemon --exec \"node --inspect-brk=0.0.0.0:9229 -r ts-node/register src/app.ts\"",
     "debug:vscode": "npm run kill && ts-node --inspect=9229 src/app.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "populate-mock-data": "ts-node -r dotenv/config src/scripts/populateMockData.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -26,6 +27,7 @@
     "helmet": "^7.0.0",
     "influx": "^5.8.0",
     "jsonwebtoken": "^9.0.2",
+    "jwt-decode": "^4.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.10.0",
